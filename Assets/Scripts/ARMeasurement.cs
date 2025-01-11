@@ -1,39 +1,32 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
-using TMPro; // TextMeshPro için gerekli
+using TMPro;
 
 public class ARMeasurement : MonoBehaviour
 {
     public ARRaycastManager raycastManager;
     public GameObject pointPrefab;
     public TMP_Text distanceText;
+    public GameObject linePrefab; // LineRenderer prefab'i
 
     private List<GameObject> points = new List<GameObject>();
+    private List<GameObject> lines = new List<GameObject>(); // Çizgiler için liste
     private float touchCooldown = 0.1f; // Dokunmalar arası minimum süre
     private float lastTouchTime;
 
-    void Start()
+    public void Start()
     {
-
         Debug.Log("ARMeasurement script started.");
         
         // Null kontrolleri
-        if (raycastManager == null)
-        {
-            Debug.LogError("ARRaycastManager atanmadı!");
-        }
-        if (pointPrefab == null)
-        {
-            Debug.LogError("PointPrefab atanmadı!");
-        }
-        if (distanceText == null)
-        {
-            Debug.LogError("DistanceText atanmadı!");
-        }
+        if (raycastManager == null) Debug.LogError("ARRaycastManager atanmadı!");
+        if (pointPrefab == null) Debug.LogError("PointPrefab atanmadı!");
+        if (distanceText == null) Debug.LogError("DistanceText atanmadı!");
+        if (linePrefab == null) Debug.LogError("LinePrefab atanmadı!");
     }
 
-    void Update()
+    public void Update()
     {
         if (Input.touchCount > 0 && Time.time - lastTouchTime > touchCooldown)
         {
@@ -43,7 +36,6 @@ public class ARMeasurement : MonoBehaviour
             if (touch.phase == TouchPhase.Began)
             {
                 List<ARRaycastHit> hits = new List<ARRaycastHit>();
-                // Use TrackableType.All to capture all possible AR trackables
                 if (raycastManager.Raycast(touch.position, hits, UnityEngine.XR.ARSubsystems.TrackableType.AllTypes))
                 {
                     Debug.Log($"Raycast başarılı! Yüzeye dokunuldu: {hits[0].pose.position}");
@@ -52,6 +44,12 @@ public class ARMeasurement : MonoBehaviour
                     // Nokta oluştur
                     GameObject point = Instantiate(pointPrefab, hitPose.position, hitPose.rotation);
                     points.Add(point);
+
+                    // Çizgi oluştur
+                    if (points.Count >= 2)
+                    {
+                        DrawLineBetweenLastPoints();
+                    }
 
                     // Mesafe hesapla
                     if (points.Count >= 2)
@@ -73,6 +71,35 @@ public class ARMeasurement : MonoBehaviour
         }
     }
 
+    private void DrawLineBetweenLastPoints()
+    {
+        if (points.Count >= 2)
+        {
+            // Yeni bir çizgi oluştur
+            GameObject line = Instantiate(linePrefab);
+            LineRenderer lineRenderer = line.GetComponent<LineRenderer>();
+
+            if (lineRenderer != null)
+            {
+                // Çizgi başlangıç ve bitiş noktalarını ayarla
+                lineRenderer.positionCount = 2;
+                lineRenderer.SetPosition(0, points[points.Count - 2].transform.position);
+                lineRenderer.SetPosition(1, points[points.Count - 1].transform.position);
+
+                // Çizgiye renk veya materyal ekle
+                lineRenderer.startColor = Color.red;
+                lineRenderer.endColor = Color.red;
+
+                // Çizgiyi listeye ekle
+                lines.Add(line);
+            }
+            else
+            {
+                Debug.LogError("LineRenderer bileşeni bulunamadı!");
+            }
+        }
+    }
+
     private void CalculateDistance()
     {
         if (points.Count >= 2)
@@ -88,7 +115,6 @@ public class ARMeasurement : MonoBehaviour
                 distanceText.text = $"Mesafe: {distance:F2} metre";
             }
 
-            // Konsola yazdır
             Debug.Log($"[Mesafe Hesaplama] İki nokta arası mesafe: {distance:F2} metre");
         }
     }
@@ -102,7 +128,7 @@ public class ARMeasurement : MonoBehaviour
         for (int i = 0; i < points.Count; i++)
         {
             Vector3 current = points[i].transform.position;
-            Vector3 next = points[(i + 1) % points.Count].transform.position; // Son noktadan ilk noktaya geçiş
+            Vector3 next = points[(i + 1) % points.Count].transform.position;
 
             perimeter += Vector3.Distance(current, next);
         }
@@ -123,7 +149,6 @@ public class ARMeasurement : MonoBehaviour
             distanceText.text = $"Çevre: {perimeter:F2} m\nAlan: {area:F2} m²";
         }
 
-        // Konsola yazdır
         Debug.Log($"[Çevre ve Alan Hesaplama] Çevre: {perimeter:F2} metre, Alan: {area:F2} metrekare");
     }
 
@@ -135,7 +160,12 @@ public class ARMeasurement : MonoBehaviour
         }
         points.Clear();
 
-        // Metni temizle
+        foreach (GameObject line in lines)
+        {
+            Destroy(line);
+        }
+        lines.Clear();
+
         if (distanceText != null)
         {
             distanceText.text = "";
